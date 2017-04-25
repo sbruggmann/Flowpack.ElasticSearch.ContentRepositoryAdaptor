@@ -187,6 +187,38 @@ class NodeIndexCommandController extends CommandController
     }
 
     /**
+     * Show a tree map
+     *
+     * return void
+     */
+    public function treeMapCommand()
+    {
+        $workspaceName = 'live';
+        $dimensions = $this->contentDimensionCombinator->getAllAllowedCombinations();
+        $context = $this->contextFactory->create(['workspaceName' => $workspaceName, 'dimensions' => $dimensions]);
+        $rootNode = $context->getRootNode();
+
+        $bash = '';
+
+        $this->outputLine("\nTree:\n");
+        foreach ($rootNode->getChildNodes() as $childNode) {
+            $this->outputLine('- ' . $childNode->getIdentifier() . ' (' . $childNode->getPath() . ')');
+            foreach ($childNode->getChildNodes() as $grandchildNode) {
+                $this->outputLine('  - ' . $grandchildNode->getIdentifier() . ' (' . $grandchildNode->getPath() . ')');
+                foreach ($grandchildNode->getChildNodes() as $greatgrandchildNode) {
+                    $this->outputLine('  - ' . $greatgrandchildNode->getIdentifier() . ' (' . $greatgrandchildNode->getPath() . ')');
+                    $bash .= './flow nodeindex:build --identifier ' . $greatgrandchildNode->getIdentifier() . ' ' . (empty($bash) ? '' : '--update') . "\n";
+                }
+                $bash .= './flow nodeindex:indexnode --identifier ' . $grandchildNode->getIdentifier() . ' --workspace ' . $workspaceName . "\n";
+            }
+            $bash .= './flow nodeindex:indexnode --identifier ' . $childNode->getIdentifier() . ' --workspace ' . $workspaceName . "\n";
+        }
+
+        $this->outputLine("\nExecute:\n");
+        $this->outputLine($bash);
+    }
+
+    /**
      * Index all nodes by creating a new index and when everything was completed, switch the index alias.
      *
      * This command (re-)indexes all nodes contained in the content repository and sets the schema beforehand.
@@ -195,9 +227,10 @@ class NodeIndexCommandController extends CommandController
      * @param boolean $update if TRUE, do not throw away the index at the start. Should *only be used for development*.
      * @param string $workspace name of the workspace which should be indexed
      * @param string $postfix Index postfix, index with the same postifix will be deleted if exist
+     * @param string $identifier Start-tree identifier
      * @return void
      */
-    public function buildCommand($limit = null, $update = false, $workspace = null, $postfix = null)
+    public function buildCommand($limit = null, $update = false, $workspace = null, $postfix = null, $identifier = null)
     {
         if ($update === true) {
             $this->logger->log('!!! Update Mode (Development) active!', LOG_INFO);
@@ -235,10 +268,10 @@ class NodeIndexCommandController extends CommandController
         };
         if ($workspace === null) {
             foreach ($this->workspaceRepository->findAll() as $workspace) {
-                $count += $this->indexWorkspace($workspace->getName(), $limit, $callback);
+                $count += $this->indexWorkspace($workspace->getName(), $limit, $callback, $identifier);
             }
         } else {
-            $count += $this->indexWorkspace($workspace, $limit, $callback);
+            $count += $this->indexWorkspace($workspace, $limit, $callback, $identifier);
         }
 
         $this->nodeIndexingManager->flushQueues();

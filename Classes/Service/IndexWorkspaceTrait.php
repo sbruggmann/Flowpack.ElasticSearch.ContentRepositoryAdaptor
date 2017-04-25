@@ -41,18 +41,21 @@ trait IndexWorkspaceTrait
      * @param string $workspaceName
      * @param integer $limit
      * @param callable $callback
+     * @param string $identifier
      * @return integer
      */
-    protected function indexWorkspace($workspaceName, $limit = null, callable $callback = null)
+    protected function indexWorkspace($workspaceName, $limit = null, callable $callback = null, $identifier = null)
     {
         $count = 0;
         $combinations = $this->contentDimensionCombinator->getAllAllowedCombinations();
         if ($combinations === []) {
-            $count += $this->indexWorkspaceWithDimensions($workspaceName, [], $limit, $callback);
+            $count += $this->indexWorkspaceWithDimensions($workspaceName, [], $limit, $callback, $identifier = null);
         } else {
-            foreach ($combinations as $combination) {
-                $count += $this->indexWorkspaceWithDimensions($workspaceName, $combination, $limit, $callback);
-            }
+            $defaultCombination = array(
+                'language' => $this->contentDimensionPresetSource->getDefaultPreset('language')['values'],
+                'country' => $this->contentDimensionPresetSource->getDefaultPreset('country')['values'],
+            );
+            $count += $this->indexWorkspaceWithDimensions($workspaceName, $defaultCombination, $limit, $callback, $identifier);
         }
 
         return $count;
@@ -63,12 +66,17 @@ trait IndexWorkspaceTrait
      * @param array $dimensions
      * @param integer $limit
      * @param callable $callback
+     * @param string $identifier
      * @return integer
      */
-    protected function indexWorkspaceWithDimensions($workspaceName, array $dimensions = [], $limit = null, callable $callback = null)
+    protected function indexWorkspaceWithDimensions($workspaceName, array $dimensions = [], $limit = null, callable $callback = null, $identifier = null)
     {
         $context = $this->contextFactory->create(['workspaceName' => $workspaceName, 'dimensions' => $dimensions]);
-        $rootNode = $context->getRootNode();
+        if (is_null($identifier)) {
+            $rootNode = $context->getRootNode();
+        } else {
+            $rootNode = $context->getNodeByIdentifier($identifier);
+        }
         $indexedNodes = 0;
 
         $traverseNodes = function (NodeInterface $currentNode, &$indexedNodes) use ($limit, &$traverseNodes) {
