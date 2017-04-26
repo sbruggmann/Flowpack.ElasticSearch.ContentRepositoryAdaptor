@@ -134,56 +134,68 @@ class NodeIndexCommandController extends CommandController
      *
      * @param string $identifier
      * @param string $workspace
+     * @param boolean $mute
      * @return void
      */
-    public function indexNodeCommand($identifier, $workspace = null)
+    public function indexNodeCommand($identifier, $workspace = null, $mute = false)
     {
         if ($workspace === null && $this->settings['indexAllWorkspaces'] === false) {
             $workspace = 'live';
         }
 
-        $indexNode = function ($identifier, Workspace $workspace, array $dimensions) {
-            $context = $this->createContentContext($workspace->getName(), $dimensions);
+        $indexNode = function ($identifier, Workspace $workspace, $mute) {
+            $configuration = $this->contentDimensionPresetSource->getAllPresets();
+            $dimensionNames = array_keys($configuration);
+            $dimensionCount = count($dimensionNames);
+            $defaultCombination = array();
+
+            if ($dimensionCount > 0) {
+                foreach ($dimensionNames as $dimensionName) {
+                    $defaultCombination[$dimensionName] = $this->contentDimensionPresetSource->getDefaultPreset($dimensionName)['values'];
+                }
+            }
+
+            $context = $this->createContentContext($workspace->getName(), $defaultCombination);
             $node = $context->getNodeByIdentifier($identifier);
             if ($node === null) {
                 $this->outputLine('Node with the given identifier is not found.');
                 $this->quit();
             }
-            $this->outputLine();
-            $this->outputLine('Index node "%s" (%s)', [
-                $node->getLabel(),
-                $node->getIdentifier(),
-            ]);
-            $this->outputLine('  workspace: %s', [
-                $workspace->getName()
-            ]);
-            $this->outputLine('  node type: %s', [
-                $node->getNodeType()->getName()
-            ]);
-            $this->outputLine('  dimensions: %s', [
-                json_encode($dimensions)
-            ]);
+            if ($mute === false) {
+                $this->outputLine();
+                $this->outputLine('Index node "%s" (%s)', [
+                    $node->getLabel(),
+                    $node->getIdentifier(),
+                ]);
+                $this->outputLine('  workspace: %s', [
+                    $workspace->getName()
+                ]);
+                $this->outputLine('  node type: %s', [
+                    $node->getNodeType()->getName()
+                ]);
+                $this->outputLine('  dimensions: %s', [
+                    json_encode($defaultCombination)
+                ]);
+            }
+
             $this->nodeIndexer->indexNode($node);
         };
 
-        $indexInWorkspace = function ($identifier, Workspace $workspace) use ($indexNode) {
-            $combinations = $this->contentDimensionCombinator->getAllAllowedCombinations();
-            if ($combinations === []) {
-                $indexNode($identifier, $workspace, []);
-            } else {
-                foreach ($combinations as $combination) {
-                    $indexNode($identifier, $workspace, $combination);
-                }
-            }
+        $indexInWorkspace = function ($identifier, Workspace $workspace, $mute) use ($indexNode) {
+            $indexNode($identifier, $workspace, $mute);
         };
 
         if ($workspace === null) {
             foreach ($this->workspaceRepository->findAll() as $workspace) {
-                $indexInWorkspace($identifier, $workspace);
+                $indexInWorkspace($identifier, $workspace, $mute);
             }
         } else {
             $workspace = $this->workspaceRepository->findByIdentifier($workspace);
-            $indexInWorkspace($identifier, $workspace);
+            $indexInWorkspace($identifier, $workspace, $mute);
+        }
+
+        if ($mute === true) {
+            $this->outputLine('indexNode success');
         }
     }
 
