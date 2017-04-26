@@ -206,13 +206,12 @@ class NodeIndexCommandController extends CommandController
             $this->outputLine('- ' . $childNode->getIdentifier() . ' (' . $childNode->getPath() . ')');
             foreach ($childNode->getChildNodes() as $grandchildNode) {
                 $this->outputLine('  - ' . $grandchildNode->getIdentifier() . ' (' . $grandchildNode->getPath() . ')');
-                foreach ($grandchildNode->getChildNodes('TYPO3.Neos:Document') as $greatgrandchildNode) {
-                    $this->outputLine('  - ' . $greatgrandchildNode->getIdentifier() . ' (' . $greatgrandchildNode->getProperty('title') . ' - ' . $greatgrandchildNode->getPath() . ')');
+                foreach ($grandchildNode->getChildNodes() as $greatgrandchildNode) {
+                    $title = $greatgrandchildNode->hasProperty('title') ? $greatgrandchildNode->getProperty('title') . ' - ' : '';
+                    $this->outputLine('  - ' . $greatgrandchildNode->getIdentifier() . ' (' . $title . $greatgrandchildNode->getPath() . ')');
                     $bash .= './flow nodeindex:build --identifier ' . $greatgrandchildNode->getIdentifier() . ' ' . (empty($bash) ? '' : '--update') . "\n";
                 }
-                $bash .= './flow nodeindex:indexnode --identifier ' . $grandchildNode->getIdentifier() . ' --workspace ' . $workspaceName . "\n";
             }
-            $bash .= './flow nodeindex:indexnode --identifier ' . $childNode->getIdentifier() . ' --workspace ' . $workspaceName . "\n";
         }
 
         $this->outputLine("\nExecute:\n");
