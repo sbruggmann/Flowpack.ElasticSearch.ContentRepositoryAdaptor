@@ -1,4 +1,5 @@
 <?php
+
 namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Command;
 
 /*
@@ -205,8 +206,8 @@ class NodeIndexCommandController extends CommandController
             $this->outputLine('- ' . $childNode->getIdentifier() . ' (' . $childNode->getPath() . ')');
             foreach ($childNode->getChildNodes() as $grandchildNode) {
                 $this->outputLine('  - ' . $grandchildNode->getIdentifier() . ' (' . $grandchildNode->getPath() . ')');
-                foreach ($grandchildNode->getChildNodes() as $greatgrandchildNode) {
-                    $this->outputLine('  - ' . $greatgrandchildNode->getIdentifier() . ' (' . $greatgrandchildNode->getPath() . ')');
+                foreach ($grandchildNode->getChildNodes('TYPO3.Neos:Document') as $greatgrandchildNode) {
+                    $this->outputLine('  - ' . $greatgrandchildNode->getIdentifier() . ' (' . $greatgrandchildNode->getProperty('title') . ' - ' . $greatgrandchildNode->getPath() . ')');
                     $bash .= './flow nodeindex:build --identifier ' . $greatgrandchildNode->getIdentifier() . ' ' . (empty($bash) ? '' : '--update') . "\n";
                 }
                 $bash .= './flow nodeindex:indexnode --identifier ' . $grandchildNode->getIdentifier() . ' --workspace ' . $workspaceName . "\n";
