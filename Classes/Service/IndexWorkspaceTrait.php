@@ -51,10 +51,13 @@ trait IndexWorkspaceTrait
         if ($combinations === []) {
             $count += $this->indexWorkspaceWithDimensions($workspaceName, [], $limit, $callback, $identifier = null);
         } else {
-            $defaultCombination = array(
-                'language' => $this->contentDimensionPresetSource->getDefaultPreset('language')['values'],
-                'country' => $this->contentDimensionPresetSource->getDefaultPreset('country')['values'],
-            );
+            $defaultCombination = array();
+
+            $dimensions = array_keys($combinations[0]);
+            foreach ($dimensions as $dimension) {
+                $defaultCombination[$dimension] = $this->contentDimensionPresetSource->getDefaultPreset($dimension)['values'];
+            }
+
             $count += $this->indexWorkspaceWithDimensions($workspaceName, $defaultCombination, $limit, $callback, $identifier);
         }
 
