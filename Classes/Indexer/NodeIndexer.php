@@ -15,14 +15,10 @@ use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\DocumentDriverInterfa
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\IndexDriverInterface;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\IndexerDriverInterface;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\NodeTypeMappingBuilderInterface;
-use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\RequestDriverInterface;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\SystemDriverInterface;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\ElasticSearchClient;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Exception;
-use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Indexer\Error\BulkIndexingError;
-use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Indexer\Error\MalformedBulkRequestError;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Service\DimensionsService;
-use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Service\ErrorHandlingService;
 use Flowpack\ElasticSearch\Domain\Model\Document as ElasticSearchDocument;
 use Flowpack\ElasticSearch\Domain\Model\Index;
 use Flowpack\ElasticSearch\Transfer\Exception\ApiException;
@@ -61,12 +57,6 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
      * @Flow\Inject
      */
     protected $dimensionsService;
-
-    /**
-     * @Flow\Inject
-     * @var ErrorHandlingService
-     */
-    protected $errorHandlingService;
 
     /**
      * @Flow\Inject
@@ -111,16 +101,16 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
     protected $indexDriver;
 
     /**
-     * @var RequestDriverInterface
-     * @Flow\Inject
-     */
-    protected $requestDriver;
-
-    /**
      * @var SystemDriverInterface
      * @Flow\Inject
      */
     protected $systemDriver;
+
+    /**
+     * @var BulkRequestHandlerInterface
+     * @Flow\Inject
+     */
+    protected $bulkRequestHandler;
 
     /**
      * The current Elasticsearch bulk request, in the format required by http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/docs-bulk.html
@@ -186,6 +176,19 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         $index->setSettingsKey($this->searchClient->getIndexName());
 
         return $index;
+    }
+
+    /**
+     * Perform all changes to the index queued up. If an implementation directly changes the index this can be no operation.
+     *
+     * @return void
+     * @throws Exception
+     */
+    public function flush()
+    {
+        $this->bulkRequestHandler->flush($this->currentBulkRequest, $this->dimensionsRegistry, $this->getIndex());
+        $this->currentBulkRequest = [];
+        $this->dimensionsRegistry = [];
     }
 
     /**
@@ -341,52 +344,6 @@ class NodeIndexer extends AbstractNodeIndexer implements BulkNodeIndexerInterfac
         $this->toBulkRequest($node, $this->indexerDriver->fulltext($node, [], $targetWorkspaceName));
 
         $this->logger->log(sprintf('NodeIndexer (%s): Removed node %s (%s) from index.', $documentIdentifier, $node->getContextPath(), $node->getIdentifier()), LOG_DEBUG, null, 'ElasticSearch (CR)');
-    }
-
-    /**
-     * Perform the current bulk request
-     *
-     * @return void
-     * @throws Exception
-     */
-    public function flush()
-    {
-        $bulkRequest = $this->currentBulkRequest;
-        if (count($bulkRequest) === 0) {
-            return;
-        }
-
-        $payload = [];
-        foreach ($bulkRequest as $bulkRequestTuple) {
-            $tupleAsJson = '';
-            foreach ($bulkRequestTuple['items'] as $bulkRequestItem) {
-                $itemAsJson = json_encode($bulkRequestItem);
-                if ($itemAsJson === false) {
-                    $this->errorHandlingService->log(new MalformedBulkRequestError('Indexing Error: Bulk request item could not be encoded as JSON - ' . json_last_error_msg(), $bulkRequestItem));
-                    continue 2;
-                }
-                $tupleAsJson .= $itemAsJson . chr(10);
-            }
-            $hash = $bulkRequestTuple['targetDimensions'];
-            if (!isset($payload[$hash])) {
-                $payload[$hash] = '';
-            }
-            $payload[$hash] .= $tupleAsJson;
-        }
-
-        foreach ($this->dimensionsRegistry as $hash => $dimensions) {
-            $this->searchClient->withDimensions(function () use (&$payload, $hash) {
-                $response = $this->requestDriver->bulk($this->getIndex(), $payload[$hash]);
-                foreach ($response as $responseLine) {
-                    if (isset($response['errors']) && $response['errors'] !== false) {
-                        $this->errorHandlingService->log(new BulkIndexingError($this->currentBulkRequest, $responseLine));
-                    }
-                }
-            }, $dimensions);
-        }
-
-        $this->dimensionsRegistry = [];
-        $this->currentBulkRequest = [];
     }
 
     /**
