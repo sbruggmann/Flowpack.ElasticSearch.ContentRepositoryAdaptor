@@ -373,6 +373,7 @@ class NodeIndexCommandController extends CommandController
      */
     public function build(array $dimensionsValues, $workspace = null, $postfix = null, $limit = null)
     {
+        $timer = microtime(true);
         $dimensionsValues = $this->configureInternalCommand($dimensionsValues, $postfix);
 
         $this->logger->log(vsprintf('Indexing %snodes to %s', [($limit !== null ? 'the first ' . $limit . ' ' : ''), $this->nodeIndexer->getIndexName()]), LOG_INFO);
@@ -400,7 +401,7 @@ class NodeIndexCommandController extends CommandController
         }
 
         $this->outputErrorHandling();
-        $this->logger->log('Done. (indexed ' . $count . ' nodes)', LOG_INFO);
+        $this->logger->log('Done. (indexed ' . $count . ' nodes in ' . round((microtime(true) - $timer), 2) / 60 . ' minutes)', LOG_INFO);
     }
 
     /**
