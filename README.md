@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor.svg)](https://travis-ci.org/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor)
+[![Build Status](https://travis-ci.org/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor.svg)](https://travis-ci.org/Flowpack/Flowpack.ElasticSearch.ContentRepositoryAdaptor) [![Latest Stable Version](https://poser.pugx.org/flowpack/elasticsearch-contentrepositoryadaptor/v/stable)](https://packagist.org/packages/flowpack/elasticsearch-contentrepositoryadaptor) [![Total Downloads](https://poser.pugx.org/flowpack/elasticsearch-contentrepositoryadaptor/downloads)](https://packagist.org/packages/flowpack/elasticsearch-contentrepositoryadaptor)
 
 # Neos Elasticsearch Adapter
 
@@ -121,21 +121,34 @@ search underneath the current site node (like in the example above).
 
 Furthermore, the following operators are supported:
 
+As **value**, the following methods accept a simple type, a node object or a DateTime object.
+
 * `nodeType('Your.Node:Type')`
 * `exactMatch('propertyName', value)` -- supports simple types: `exactMatch('tag', 'foo')`, or node references: `exactMatch('author', authorNode)`
-* `greaterThan('propertyName', value)` -- range filter with property values greater than the given value
-* `greaterThanOrEqual('propertyName', value)` -- range filter with property values greater than or equal to the given value
-* `lessThan('propertyName', value)` -- range filter with property values less than the given value
-* `lessThanOrEqual('propertyName', value)` -- range filter with property values less than or equal to the given value
+* `exclude('propertyName', value)` -- excludes results by property - the negation of exactMatch.
+* `greaterThan('propertyName', value, [clauseType])` -- range filter with property values greater than the given value
+* `greaterThanOrEqual('propertyName', value, [clauseType])` -- range filter with property values greater than or equal to the given value
+* `lessThan('propertyName', value, [clauseType])` -- range filter with property values less than the given value
+* `lessThanOrEqual('propertyName', value, [clauseType])` -- range filter with property values less than or equal to the given value
 * `sortAsc('propertyName')` and `sortDesc('propertyName')` -- can also be used multiple times, e.g. `sortAsc('tag').sortDesc(`date')`
    will first sort by tag ascending, and then by date descending.
 * `limit(5)` -- only return five results. If not specified, the default limit by Elasticsearch applies (which is at 10 by default)
 * `from(5)` -- return the results starting from the 6th one
 * `fulltext('searchWord', options)` -- do a query_string query on the Fulltext index using the searchword and additional [options](https://www.elastic.co/guide/en/elasticsearch/reference/5.6/query-dsl-query-string-query.html) to the query_string
 
+#### moreLikeThis(like, fields, options)
+
+The More Like This Query (MLT Query) finds documents that are "like" a given text or a given set of documents.
+
+* `like` Single value or an array of strings or nodes.
+* `fields` An array of fields which are used to compare other docs with the given "like" definition.
+* `options` Additional options for the `more_like_this` query. See the [elasticsearch documentation](https://www.elastic.co/guide/en/elasticsearch/reference/5.6/query-dsl-mlt-query.html) for what is possible.
+
 Furthermore, there is a more low-level operator which can be used to add arbitrary Elasticsearch filters:
 
-* `queryFilter("filterType", {option1: "value1"})`
+* `queryFilter("filterType", {option1: "value1"}, [clauseType])`
+
+The optional argument `clauseType` defaults to "must" and can be used to specify the boolean operator of the [bool query](https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-bool-query.html). It has to be one of `must`, `should`, `must_not` or `filter`.	
 
 At lowest level, there is the `request` operator which allows to modify the request in arbitrary manner. Note that the existing request is merged with the passed-in type in case it is an array:
 
@@ -400,7 +413,7 @@ of an array or a string. Check the documentation \Neos\Utility\Arrays::getValueB
 
 **Important notice**
 
-The ViewHelper GetHitArrayForNode will return the raw hit result array. The path poperty allows you to access some
+The ViewHelper GetHitArrayForNode will return the raw hit result array. The path property allows you to access some
 specific data like the the sort data. If there is only one value for your path the value will be returned.
 If there is more data the full array will be returned by GetHitArrayForNode-VH. So you might have to use the
 ForViewHelper to access your sort values.
@@ -446,7 +459,7 @@ awesome TS search query.
 Simple suggestion that returns a suggestion based on the sent term
 
 ```
-suggestions = $(Search.query(site)...termSuggestions('someTerm')}
+suggestions = ${Search.query(site)...termSuggestions('someTerm')}
 ```
 You can access your suggestions inside your fluid template with
 ```
@@ -472,6 +485,29 @@ suggestionsQueryDefinition = Neos.Fusion:RawArray {
 }
 suggestions = ${Search.query(site)...suggestions('my_suggestions', this.suggestionsQueryDefinition)}
 ```
+
+## Calculate the maximum cache time
+
+In order to set the maximum cache time of a fusion prototype that renders nodes fetched by `Search()`,
+the nearest future value of the hiddenBeforeDateTime or hiddenAfterDateTime properties of all nodes in the result needs to be calculated.
+
+	prototype(Acme.Blog:Listing) < prototype(Neos.Fusion:Collection) {
+		@context.searchQuery = ${Search.query(site).nodeType('Acme.Blog:Post')}
+	
+	    collection = ${searchQuery.execute()}
+	    itemName = 'node'
+	    itemRenderer = Acme.Blog:Post
+	    
+	     @cache {
+        	mode = 'cached'
+			maximumLifetime = ${searchQuery.cacheLifetime()}
+			
+        	entryTags {
+          	map = ${'NodeType_Acme.Blog:Post'}
+        	}
+    	}
+	}
+
 
 ## Advanced: Configuration of Indexing
 

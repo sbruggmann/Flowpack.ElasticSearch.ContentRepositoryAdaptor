@@ -14,6 +14,10 @@ namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Tests\Functional\Eel;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Command\NodeIndexCommandController;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Eel\ElasticSearchQueryBuilder;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Eel\ElasticSearchQueryResult;
+use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Exception\QueryBuildingException;
+use Neos\ContentRepository\Exception\NodeExistsException;
+use Neos\ContentRepository\Exception\NodeTypeNotFoundException;
+use Neos\Flow\Mvc\Exception\StopActionException;
 use Neos\Flow\Persistence\QueryResultInterface;
 use Neos\Flow\Tests\FunctionalTestCase;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
@@ -340,6 +344,22 @@ class ElasticSearchQueryTest extends FunctionalTestCase
     }
 
     /**
+     * @test
+     * @throws QueryBuildingException
+     * @throws \Flowpack\ElasticSearch\Exception
+     */
+    public function cacheLifetimeIsCalculatedCorrectly()
+    {
+        $cacheLifetime = $this->getQueryBuilder()
+            ->log($this->getLogMessagePrefix(__METHOD__))
+            ->nodeType('Neos.NodeTypes:Text')
+            ->sortAsc('title')
+            ->cacheLifetime();
+
+        $this->assertEquals(600, $cacheLifetime);
+    }
+
+    /**
      * @return string
      */
     protected function getLogMessagePrefix($method)
@@ -349,6 +369,9 @@ class ElasticSearchQueryTest extends FunctionalTestCase
 
     /**
      * Creates some sample nodes to run tests against
+     * @throws NodeExistsException
+     * @throws NodeTypeNotFoundException
+     * @throws StopActionException
      */
     protected function createNodesForNodeSearchTest()
     {
@@ -356,16 +379,25 @@ class ElasticSearchQueryTest extends FunctionalTestCase
         $newDocumentNode1->setProperty('title', 'chicken');
         $newDocumentNode1->setProperty('title_analyzed', 'chicken');
 
-        $newContentNode = $newDocumentNode1->getNode('main')->createNode('document-1-text-1', $this->nodeTypeManager->getNodeType('Neos.NodeTypes:Text'));
-        $newContentNode->setProperty('text', 'A Scout smiles and whistles under all circumstances.');
+        $newContentNode1 = $newDocumentNode1->getNode('main')->createNode('document-1-text-1', $this->nodeTypeManager->getNodeType('Neos.NodeTypes:Text'));
+        $newContentNode1->setProperty('text', 'A Scout smiles and whistles under all circumstances.');
 
         $newDocumentNode2 = $this->siteNode->createNode('test-node-2', $this->nodeTypeManager->getNodeType('Neos.NodeTypes:Page'));
         $newDocumentNode2->setProperty('title', 'chicken');
         $newDocumentNode2->setProperty('title_analyzed', 'chicken');
 
+        // Nodes for cacheLifetime test
+        $newContentNode2 = $newDocumentNode2->getNode('main')->createNode('document-2-text-1', $this->nodeTypeManager->getNodeType('Neos.NodeTypes:Text'));
+        $newContentNode2->setProperty('text', 'Hidden after 2025-01-01');
+        $newContentNode2->setHiddenAfterDateTime(new \DateTime('@1735686000'));
+        $newContentNode3 = $newDocumentNode2->getNode('main')->createNode('document-2-text-2', $this->nodeTypeManager->getNodeType('Neos.NodeTypes:Text'));
+        $newContentNode3->setProperty('text', 'Hidden before 2018-07-18');
+        $newContentNode3->setHiddenBeforeDateTime(new \DateTime('@1531864800'));
+
         $newDocumentNode3 = $this->siteNode->createNode('test-node-3', $this->nodeTypeManager->getNodeType('Neos.NodeTypes:Page'));
         $newDocumentNode3->setProperty('title', 'egg');
         $newDocumentNode3->setProperty('title_analyzed', 'egg');
+
 
         $dimensionContext = $this->contextFactory->create([
             'workspaceName' => 'live',
@@ -387,13 +419,15 @@ class ElasticSearchQueryTest extends FunctionalTestCase
     }
 
     /**
-     * @return QueryBuilderInterface
+     * @return ElasticSearchQueryBuilder
+     * @throws QueryBuildingException
+     * @throws \Exception
      */
-    protected function getQueryBuilder()
+    protected function getQueryBuilder(): ElasticSearchQueryBuilder
     {
-        /** @var ElasticSearchQueryBuilder $query */
-        $query = $this->objectManager->get(ElasticSearchQueryBuilder::class);
+        $elasticSearchQueryBuilder = $this->objectManager->get(ElasticSearchQueryBuilder::class);
+        $this->inject($elasticSearchQueryBuilder, 'now', new \DateTimeImmutable('@1735685400')); // Dec. 31, 2024 23:50:00
 
-        return $query->query($this->siteNode);
+        return $elasticSearchQueryBuilder->query($this->siteNode);
     }
 }
