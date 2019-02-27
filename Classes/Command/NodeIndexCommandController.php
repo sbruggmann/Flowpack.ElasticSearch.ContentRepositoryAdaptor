@@ -132,6 +132,12 @@ class NodeIndexCommandController extends CommandController
     protected $settings;
 
     /**
+     * @Flow\InjectConfiguration(package="Flowpack.ElasticSearch", path="indexes.default")
+     * @var array
+     */
+    protected $dimensionSettings;
+
+    /**
      * Called by the Flow object framework after creating the object and resolving all dependencies.
      *
      * @param integer $cause Creation cause
@@ -150,8 +156,9 @@ class NodeIndexCommandController extends CommandController
     public function showDimensionsMappingCommand()
     {
         $indexName = $this->nodeIndexer->getIndexName();
+        $configuredDimensionCombinations = $this->configuredDimensionCombinations();
         foreach ($this->contentDimensionCombinator->getAllAllowedCombinations() as $dimensionValues) {
-            $this->outputLine('<info>%s-%s</info> %s', [$indexName, $this->dimensionsService->hash($dimensionValues), \json_encode($dimensionValues)]);
+            $this->outputLine('<info>%s-%s</info> %s %s', [$indexName, $this->dimensionsService->hash($dimensionValues), $configuredDimensionCombinations->contains($dimensionValues) ? '☑' : '☐', \json_encode($dimensionValues)]);
         }
     }
 
@@ -234,7 +241,7 @@ class NodeIndexCommandController extends CommandController
         };
 
         $indexInWorkspace = function ($identifier, Workspace $workspace) use ($indexNode) {
-            $combinations = $this->contentDimensionCombinator->getAllAllowedCombinations();
+            $combinations = $this->configuredDimensionCombinations();
             if ($combinations === []) {
                 $indexNode($identifier, $workspace, []);
             } else {
@@ -308,10 +315,11 @@ class NodeIndexCommandController extends CommandController
             ]));
         };
 
-        $combinations = new ArrayCollection($this->contentDimensionCombinator->getAllAllowedCombinations());
+        $allCombinations = new ArrayCollection($this->contentDimensionCombinator->getAllAllowedCombinations());
+        $combinations = $this->configuredDimensionCombinations();
 
         $this->outputSection('Create indicies ...');
-        $combinations->map($create);
+        $allCombinations->map($create);
 
         $this->outputSection('Indexing nodes ...');
         $combinations->map($build);
@@ -320,7 +328,7 @@ class NodeIndexCommandController extends CommandController
         $combinations->map($refresh);
 
         $this->outputSection('Update aliases ...');
-        $combinations->map($updateAliases);
+        $allCombinations->map($updateAliases);
 
         $this->nodeIndexer->updateMainAlias();
 
@@ -612,5 +620,24 @@ class NodeIndexCommandController extends CommandController
     protected function outputMemoryUsage()
     {
         $this->logger->log(vsprintf('Memory usage %s', [Files::bytesToSizeString(\memory_get_usage(true))]), LOG_INFO);
+    }
+
+    protected function configuredDimensionCombinations()
+    {
+        $allCombinations = new ArrayCollection($this->contentDimensionCombinator->getAllAllowedCombinations());
+
+        $indexName = $this->nodeIndexer->getIndexName();
+        $indexDelimiterPosition = strpos($indexName, '-');
+        $indexPrefix = $indexDelimiterPosition === false ? $indexName : substr($indexName, 0, $indexDelimiterPosition);
+
+        $combinations = new ArrayCollection();
+        foreach ($allCombinations as $dimensionValues) {
+            $checkConfigurationFor = $indexPrefix . '-' . $this->dimensionsService->hash($dimensionValues);
+            if (array_key_exists($checkConfigurationFor, $this->dimensionSettings)) {
+                $combinations->add($dimensionValues);
+            }
+        }
+
+        return $combinations;
     }
 }
