@@ -60,4 +60,20 @@ class IndexDriver extends AbstractDriver implements IndexDriverInterface
 
         return is_array($treatedContent) ? array_keys($treatedContent) : [];
     }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function indexesByPrefix($alias)
+    {
+        $response = $this->searchClient->request('GET', '/_alias/' . $alias . '*');
+        if ($response->getStatusCode() !== 200 && $response->getStatusCode() !== 404) {
+            throw new Exception('The alias prefix "' . $alias . '" was not found with some unexpected error... (return code: ' . $response->getStatusCode() . ')', 1383650137);
+        }
+
+        // return empty array if content from response cannot be read as an array
+        $treatedContent = $response->getTreatedContent();
+
+        return is_array($treatedContent) ? array_keys($treatedContent) : [];
+    }
 }
