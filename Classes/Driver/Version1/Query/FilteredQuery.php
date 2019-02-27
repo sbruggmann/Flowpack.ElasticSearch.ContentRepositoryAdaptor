@@ -1,5 +1,5 @@
 <?php
-namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\Version5\Query;
+namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\Version1\Query;
 
 /*
  * This file is part of the Flowpack.ElasticSearch.ContentRepositoryAdaptor package.
@@ -13,17 +13,14 @@ namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\Version5\Query;
 
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\AbstractQuery;
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Exception;
-use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Exception\QueryBuildingException;
 
 /**
- * Filtered query for elastic version 5
+ * Default Filtered Query
  */
 class FilteredQuery extends AbstractQuery
 {
-
     /**
      * {@inheritdoc}
-     * @throws QueryBuildingException
      */
     public function getCountRequestAsJson()
     {
@@ -58,11 +55,10 @@ class FilteredQuery extends AbstractQuery
      */
     public function fulltext(string $searchWord, array $options = [])
     {
-        $this->appendAtPath('query.bool.must', [
-            'query_string' => array_merge($options, [
-                'query' => $searchWord,
-                'fields' => ['__fulltext*']
-            ])
+        $this->appendAtPath('query.filtered.query.bool.must', [
+            'query_string' => [
+                'query' => $searchWord
+            ]
         ]);
     }
 
@@ -72,9 +68,9 @@ class FilteredQuery extends AbstractQuery
     public function queryFilter($filterType, $filterOptions, $clauseType = 'must')
     {
         if (!in_array($clauseType, ['must', 'should', 'must_not'])) {
-            throw new QueryBuildingException('The given clause type "' . $clauseType . '" is not supported. Must be one of "must", "should", "must_not".', 1383716082);
+            throw new Exception\QueryBuildingException('The given clause type "' . $clauseType . '" is not supported. Must be one of "must", "should", "must_not".', 1383716082);
         }
 
-        $this->appendAtPath('query.bool.filter.bool.' . $clauseType, [$filterType => $filterOptions]);
+        $this->appendAtPath('query.filtered.filter.bool.' . $clauseType, [$filterType => $filterOptions]);
     }
 }

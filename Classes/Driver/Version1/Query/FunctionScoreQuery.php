@@ -1,5 +1,5 @@
 <?php
-namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\Version5\Query;
+namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\Version1\Query;
 
 /*
  * This file is part of the Flowpack.ElasticSearch.ContentRepositoryAdaptor package.
@@ -12,6 +12,7 @@ namespace Flowpack\ElasticSearch\ContentRepositoryAdaptor\Driver\Version5\Query;
  */
 
 use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Exception;
+use Neos\Utility\Arrays;
 
 class FunctionScoreQuery extends FilteredQuery
 {
